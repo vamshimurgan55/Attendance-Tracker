@@ -423,5 +423,60 @@ def employee_report(employee_id):
     conn.close()
     return render_template('employee_report.html', employee=employee, attendance_records=attendance_records)
 
+# --- NEW ROUTE FOR INDIVIDUAL EMPLOYEE CSV EXPORT ---
+@app.route('/export_employee_csv/<int:employee_id>')
+@admin_required
+def export_employee_csv(employee_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    employee = conn.execute("SELECT employee_id_text, name FROM employees WHERE id = ?", (employee_id,)).fetchone()
+    if not employee:
+        flash("Employee not found.", "error")
+        conn.close()
+        return redirect(url_for('admin_dashboard'))
+
+    cursor.execute(f"""
+        SELECT date, time_in, time_out, location
+        FROM attendance
+        WHERE employee_id = ?
+        ORDER BY date DESC, time_in DESC
+    """, (employee_id,))
+    records = cursor.fetchall()
+    conn.close()
+
+    csv_data = f"Employee ID: {employee['employee_id_text']}\n"
+    csv_data += f"Employee Name: {employee['name']}\n\n"
+    csv_data += "Date,Time In,Time Out,Location,Duration (Minutes)\n"
+
+    for record in records:
+        time_in_formatted = format_time_12hr(record['time_in'])
+        time_out_formatted = format_time_12hr(record['time_out'])
+
+        duration_minutes = None
+        if record['time_in'] and record['time_out']:
+            try:
+                time_in_dt = datetime.strptime(record['time_in'], '%H:%M:%S')
+                time_out_dt = datetime.strptime(record['time_out'], '%H:%M:%S')
+                if time_out_dt < time_in_dt:
+                    time_out_dt += timedelta(days=1)
+                duration = time_out_dt - time_in_dt
+                duration_minutes = round(duration.total_seconds() / 60)
+            except ValueError:
+                duration_minutes = None
+        
+        csv_data += f"{record['date']},"
+        csv_data += f"{time_in_formatted},"
+        csv_data += f"{time_out_formatted if time_out_formatted != 'N/A' else ''}," # Empty string for N/A in CSV
+        csv_data += f"{record['location'] if record['location'] else ''},"
+        csv_data += f"{duration_minutes if duration_minutes is not None else ''}\n"
+
+    filename = f"{employee['name'].replace(' ', '_')}_attendance_report.csv"
+    response = app.make_response(csv_data)
+    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    response.headers["Content-type"] = "text/csv"
+    return response
+# --- END NEW ROUTE ---
+
 if __name__ == '__main__':
     app.run(debug=True)
