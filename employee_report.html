@@ -16,6 +16,9 @@
     <div class="button-group">
         {# This button now correctly points to the 'dashboard' endpoint #}
         <a href="{{ url_for('dashboard') }}"><button>Back to Admin Dashboard</button></a>
+        {# --- ADDED NEW DOWNLOAD BUTTON --- #}
+        <a href="{{ url_for('export_employee_csv', employee_id=employee.id) }}"><button>Download CSV</button></a>
+        {# --- END NEW DOWNLOAD BUTTON --- #}
         <a href="{{ url_for('logout') }}"><button class="logout-btn">Logout</button></a>
     </div>
 
